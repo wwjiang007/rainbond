@@ -35,11 +35,12 @@ func (v2 *V2) Routes() chi.Router {
 	r.Post("/show", controller.GetManager().Show)
 	r.Mount("/tenants", v2.tenantRouter())
 	r.Mount("/nodes", v2.nodesRouter())
-	r.Mount("/job", v2.jobsRouter())
+	r.Mount("/notificationEvent", v2.notificationEventRouter())
 	r.Mount("/cluster", v2.clusterRouter())
 	r.Mount("/resources", v2.resourcesRouter())
 	r.Mount("/prometheus", v2.prometheusRouter())
 	r.Get("/event", controller.GetManager().Event)
+	r.Mount("/app", v2.appRouter())
 	return r
 }
 
@@ -48,6 +49,7 @@ func (v2 *V2) tenantRouter() chi.Router {
 	r.Post("/", controller.GetManager().Tenant)
 	r.Mount("/{tenant_name}", v2.tenantNameRouter())
 	r.Get("/", controller.GetManager().Tenant)
+	r.Get("/services-count", controller.GetManager().ServicesCount)
 	return r
 }
 
@@ -77,6 +79,8 @@ func (v2 *V2) tenantNameRouter() chi.Router {
 	//创建应用
 	r.Post("/services", controller.GetManager().CreateService)
 	r.Post("/plugin", controller.GetManager().PluginAction)
+	r.Post("/plugins/{plugin_id}/share", controller.GetManager().SharePlugin)
+	r.Get("/plugins/{plugin_id}/share/{share_id}", controller.GetManager().SharePluginResult)
 	r.Get("/plugin", controller.GetManager().PluginAction)
 	r.Post("/services_status", controller.GetManager().StatusServiceList)
 	r.Mount("/services/{service_alias}", v2.serviceRouter())
@@ -84,6 +88,16 @@ func (v2 *V2) tenantNameRouter() chi.Router {
 	r.Mount("/sources", v2.defineSourcesRouter())
 	r.Get("/event", controller.GetManager().Event)
 	r.Get("/chargesverify", controller.ChargesVerifyController)
+	//get some service pod info
+	r.Get("/pods", controller.Pods)
+	//app backup
+	r.Get("/groupapp/backups", controller.Backups)
+	r.Post("/groupapp/backups", controller.NewBackups)
+	r.Post("/groupapp/backupcopy", controller.BackupCopy)
+	r.Get("/groupapp/backups/{backup_id}", controller.GetBackup)
+	r.Delete("/groupapp/backups/{backup_id}", controller.DeleteBackup)
+	r.Post("/groupapp/backups/{backup_id}/restore", controller.Restore)
+	r.Get("/groupapp/backups/{backup_id}/restore/{restore_id}", controller.RestoreResult)
 
 	return r
 }
@@ -114,7 +128,10 @@ func (v2 *V2) serviceRouter() chi.Router {
 	//应用状态获取(act)
 	r.Get("/status", controller.GetManager().StatusService)
 	//构建版本列表
-	r.Get("/buildlist", controller.GetManager().BuildList)
+	r.Get("/build-list", controller.GetManager().BuildList)
+	//构建版本操作
+	r.Get("/build-version/{build_version}",controller.GetManager().BuildVersionInfo)
+	r.Delete("/build-version/{build_version}",controller.GetManager().BuildVersionInfo)
 	//应用分享
 	r.Post("/share", controller.GetManager().Share)
 	r.Get("/share/{share_id}", controller.GetManager().ShareResult)
@@ -140,6 +157,7 @@ func (v2 *V2) serviceRouter() chi.Router {
 	r.Delete("/ports/{port}", controller.GetManager().Ports)
 	r.Put("/ports/{port}/outer", controller.GetManager().PortOuterController)
 	r.Put("/ports/{port}/inner", controller.GetManager().PortInnerController)
+	r.Put("/ports/{port}/changelbport", controller.GetManager().ChangeLBPort)
 
 	//应用版本回滚(act)
 	r.Post("/rollback", controller.GetManager().RollBack)
@@ -207,5 +225,30 @@ func (v2 *V2) resourcesRouter() chi.Router {
 
 func (v2 *V2) prometheusRouter() chi.Router {
 	r := chi.NewRouter()
+	return r
+}
+
+func (v2 *V2) appRouter() chi.Router {
+	r := chi.NewRouter()
+	r.Post("/export", controller.GetManager().ExportApp)
+	r.Get("/export/{eventId}", controller.GetManager().ExportApp)
+
+	r.Get("/download/{format}/{fileName}", controller.GetManager().Download)
+	r.Post("/upload", controller.GetManager().Upload)
+
+	r.Post("/import/ids/{eventId}", controller.GetManager().ImportID)
+	r.Get("/import/ids/{eventId}", controller.GetManager().ImportID)
+	r.Delete("/import/ids/{eventId}", controller.GetManager().ImportID)
+
+	r.Post("/import", controller.GetManager().ImportApp)
+	r.Get("/import/{eventId}", controller.GetManager().ImportApp)
+	return r
+}
+
+func (v2 *V2) notificationEventRouter() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", controller.GetNotificationEvents)
+	r.Put("/{hash}", controller.HandleNotificationEvent)
+	r.Get("/{hash}", controller.GetNotificationEvent)
 	return r
 }

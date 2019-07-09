@@ -20,6 +20,7 @@ package dao
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goodrain/rainbond/db/model"
@@ -112,6 +113,22 @@ func (t *K8sServiceDaoImpl) DeleteK8sServiceByName(k8sServiceName string) error 
 	return nil
 }
 
+func (t *K8sServiceDaoImpl) GetAllK8sService() ([]*model.K8sService, error) {
+	var services []*model.K8sService
+	if err := t.DB.Find(&services).Error; err != nil {
+		return nil, err
+	} else {
+		return services, err
+	}
+
+}
+
+func (t *K8sServiceDaoImpl) K8sServiceIsExist(tenantId string, K8sServiceID string) bool {
+	var services model.K8sService
+	isExist := t.DB.Where("tenant_id=? AND inner_service_id=?", tenantId, K8sServiceID).First(&services).RecordNotFound()
+	return isExist
+}
+
 type K8sDeployReplicationDaoImpl struct {
 	DB *gorm.DB
 }
@@ -190,6 +207,13 @@ func (t *K8sDeployReplicationDaoImpl) DeleteK8sDeployReplicationByServiceAndVers
 	}
 	return nil
 }
+func (t *K8sDeployReplicationDaoImpl) DeleteK8sDeployReplicationByServiceAndMarked(serviceID string) error {
+	var deploy model.K8sDeployReplication
+	if err := t.DB.Where("service_id=? and is_delete=?", serviceID, true).Delete(&deploy).Error; err != nil {
+		return err
+	}
+	return nil
+}
 func (t *K8sDeployReplicationDaoImpl) BeachDelete(deletelist []uint) error {
 	var deploy model.K8sDeployReplication
 	if err := t.DB.Where("\"ID\" in (?)", deletelist).Delete(&deploy).Error; err != nil {
@@ -213,6 +237,20 @@ func (t *K8sDeployReplicationDaoImpl) DeleteK8sDeployReplicationByService(servic
 		return err
 	}
 	return nil
+}
+
+func (t *K8sDeployReplicationDaoImpl) GetK8sDeployReplicationByIsDelete(rcType string, isDelete bool) ([]*model.K8sDeployReplication, error) {
+	var deploy []*model.K8sDeployReplication
+	if err := t.DB.Model(&deploy).Where("rc_type=? AND is_delete=?",rcType, isDelete).Find(&deploy).Error; err != nil {
+		return nil, err
+	}
+	return deploy, nil
+}
+
+func (t *K8sDeployReplicationDaoImpl) GetK8sDeployReplicationIsExist(tenantId string, RcType string, RcId string, isDelete bool) (IsExist bool) {
+	var deploy model.K8sDeployReplication
+	isExist := t.DB.Model(&deploy).Where("tenant_id=? AND rc_type=? AND rc_id=? AND is_delete=?", tenantId, RcType, RcId, isDelete).First(&deploy).RecordNotFound()
+	return isExist
 }
 
 //K8sPodDaoImpl k8s pod dao
@@ -267,8 +305,20 @@ func (t *K8sPodDaoImpl) DeleteK8sPodByName(podName string) error {
 	return nil
 }
 
+//GetPodByService get pod from serviceids
+// if serviceID support multiple split from ","
 func (t *K8sPodDaoImpl) GetPodByService(serviceID string) ([]*model.K8sPod, error) {
 	var pods []*model.K8sPod
+	if strings.Contains(serviceID, ",") {
+		serviceIDs := strings.Split(serviceID, ",")
+		if err := t.DB.Where("service_id in (?)", serviceIDs).Find(&pods).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return pods, nil
+			}
+			return nil, err
+		}
+		return pods, nil
+	}
 	if err := t.DB.Where("service_id=?", serviceID).Find(&pods).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return pods, nil
@@ -277,6 +327,8 @@ func (t *K8sPodDaoImpl) GetPodByService(serviceID string) ([]*model.K8sPod, erro
 	}
 	return pods, nil
 }
+
+//GetPodByReplicationID get pod by replication
 func (t *K8sPodDaoImpl) GetPodByReplicationID(replicationID string) ([]*model.K8sPod, error) {
 	var pods []*model.K8sPod
 	if err := t.DB.Where("rc_id=?", replicationID).Find(&pods).Error; err != nil {

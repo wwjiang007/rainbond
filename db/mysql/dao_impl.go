@@ -430,3 +430,31 @@ func (m *Manager) RegionProcotolsDao() dao.RegionProcotolsDao {
 		DB: m.db,
 	}
 }
+
+//RegionProcotolsDaoTransactions RegionProcotolsDao
+func (m *Manager) RegionProcotolsDaoTransactions(db *gorm.DB) dao.RegionProcotolsDao {
+	return &mysqldao.RegionProcotolsDaoImpl{
+		DB: db,
+	}
+}
+
+//NotificationEventDao NotificationEventDao
+func (m *Manager) NotificationEventDao() dao.NotificationEventDao {
+	return &mysqldao.NotificationEventDaoImpl{
+		DB: m.db,
+	}
+}
+
+//AppDao app export and import info
+func (m *Manager) AppDao() dao.AppDao {
+	return &mysqldao.AppDaoImpl{
+		DB: m.db,
+	}
+}
+
+//AppBackupDao group app backup info
+func (m *Manager) AppBackupDao() dao.AppBackupDao {
+	return &mysqldao.AppBackupDaoImpl{
+		DB: m.db,
+	}
+}

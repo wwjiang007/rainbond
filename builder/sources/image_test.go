@@ -70,3 +70,17 @@ func TestCheckTrustedRepositories(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestImageSave(t *testing.T) {
+	dc, _ := client.NewEnvClient()
+	if err := ImageSave(dc, "hub.goodrain.com/zengqg-test/etcd:v2.2.0", "/tmp/testsaveimage.tar", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestImageImport(t *testing.T) {
+	dc, _ := client.NewEnvClient()
+	if err := ImageImport(dc, "hub.goodrain.com/zengqg-test/etcd:v2.2.0", "/tmp/testsaveimage.tar", nil); err != nil {
+		t.Fatal(err)
+	}
+}

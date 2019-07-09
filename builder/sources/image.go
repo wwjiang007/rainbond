@@ -23,7 +23,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,10 +45,24 @@ import (
 
 //ImagePull 拉取镜像
 //timeout 分钟为单位
-func ImagePull(dockerCli *client.Client, image string, opts types.ImagePullOptions, logger event.Logger, timeout int) (*types.ImageInspect, error) {
+func ImagePull(dockerCli *client.Client, image string, username, password string, logger event.Logger, timeout int) (*types.ImageInspect, error) {
 	if logger != nil {
 		//进度信息
 		logger.Info(fmt.Sprintf("开始获取镜像：%s", image), map[string]string{"step": "pullimage"})
+	}
+	var pullipo types.ImagePullOptions
+	if username != "" && password != "" {
+		auth, err := EncodeAuthToBase64(types.AuthConfig{Username: username, Password: password})
+		if err != nil {
+			logrus.Errorf("make auth base63 push image error: %s", err.Error())
+			logger.Error(fmt.Sprintf("生成获取镜像的Token失败"), map[string]string{"step": "builder-exector", "status": "failure"})
+			return nil, err
+		}
+		pullipo = types.ImagePullOptions{
+			RegistryAuth: auth,
+		}
+	} else {
+		pullipo = types.ImagePullOptions{}
 	}
 	rf, err := reference.ParseAnyReference(image)
 	if err != nil {
@@ -59,7 +76,7 @@ func ImagePull(dockerCli *client.Client, image string, opts types.ImagePullOptio
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*time.Duration(timeout))
 	defer cancel()
 	//TODO: 使用1.12版本api的bug “repository name must be canonical”，使用rf.String()完整的镜像地址
-	readcloser, err := dockerCli.ImagePull(ctx, rf.String(), opts)
+	readcloser, err := dockerCli.ImagePull(ctx, rf.String(), pullipo)
 	if err != nil {
 		logrus.Debugf("image name: %s readcloser error: %v", image, err.Error())
 		if strings.HasSuffix(err.Error(), "does not exist or no pull access") {
@@ -71,15 +88,27 @@ func ImagePull(dockerCli *client.Client, image string, opts types.ImagePullOptio
 		return nil, err
 	}
 	defer readcloser.Close()
-	r := bufio.NewReader(readcloser)
+	dec := json.NewDecoder(readcloser)
 	for {
-		if line, _, err := r.ReadLine(); err == nil {
-			if logger != nil {
-				//进度信息
-				logger.Debug(string(line), map[string]string{"step": "progress"})
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		var jm JSONMessage
+		if err := dec.Decode(&jm); err != nil {
+			if err == io.EOF {
+				break
 			}
+			return nil, err
+		}
+		if jm.Error != nil {
+			return nil, jm.Error
+		}
+		if logger != nil {
+			logger.Debug(jm.JSONString(), map[string]string{"step": "progress"})
 		} else {
-			break
+			fmt.Println(jm.JSONString())
 		}
 	}
 	ins, _, err := dockerCli.ImageInspectWithRaw(ctx, image, false)
@@ -183,37 +212,24 @@ func ImagePush(dockerCli *client.Client, image, user, pass string, logger event.
 	}
 	if readcloser != nil {
 		defer readcloser.Close()
-		r := bufio.NewReader(readcloser)
+		dec := json.NewDecoder(readcloser)
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
-			if line, _, err := r.ReadLine(); err == nil {
-				//if receive a login contains authentication required.
-				//it means authentication failure
-				if strings.Contains(string(line), "authentication required") {
-					return fmt.Errorf("authentication required")
-				}
-				if strings.Contains(string(line), "requested access to the resource is denied") {
-					return fmt.Errorf("requested access to the resource is denied")
-				}
-				if strings.Contains(string(line), "incorrect username or password") {
-					return fmt.Errorf("incorrect username or password")
-				}
-				if logger != nil {
-					//进度信息
-					logger.Debug(string(line), map[string]string{"step": "progress"})
-				} else {
-					fmt.Println(string(line))
-				}
-			} else {
-				if err.Error() == "EOF" {
-					return nil
+			var jm JSONMessage
+			if err := dec.Decode(&jm); err != nil {
+				if err == io.EOF {
+					break
 				}
 				return err
 			}
+			if jm.Error != nil {
+				return jm.Error
+			}
+			logger.Debug(jm.JSONString(), map[string]string{"step": "progress"})
 		}
 
 	}
@@ -301,32 +317,24 @@ func ImageBuild(dockerCli *client.Client, contextDir string, options types.Image
 	}
 	if rc.Body != nil {
 		defer rc.Body.Close()
-		r := bufio.NewReader(rc.Body)
+		dec := json.NewDecoder(rc.Body)
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
 			}
-			if line, _, err := r.ReadLine(); err == nil {
-				if len(line) > 0 {
-					message := strings.Replace(string(line), "\n", "", -1)
-					message = strings.Replace(message, "\r", "", -1)
-					message = strings.Replace(message, "\u003e", ">", -1)
-					if len(message) > 0 {
-						if logger != nil {
-							logger.Debug(message, map[string]string{"step": "build-progress"})
-						} else {
-							fmt.Println(message)
-						}
-					}
-				}
-			} else {
-				if err.Error() == "EOF" {
-					return nil
+			var jm JSONMessage
+			if err := dec.Decode(&jm); err != nil {
+				if err == io.EOF {
+					break
 				}
 				return err
 			}
+			if jm.Error != nil {
+				return jm.Error
+			}
+			logger.Debug(jm.JSONString(), map[string]string{"step": "build-progress"})
 		}
 	}
 	return nil
@@ -341,4 +349,116 @@ func ImageInspectWithRaw(dockerCli *client.Client, image string) (*types.ImageIn
 		return nil, err
 	}
 	return &ins, nil
+}
+
+//ImageSave save image to tar file
+// destination destination file name eg. /tmp/xxx.tar
+func ImageSave(dockerCli *client.Client, image, destination string, logger event.Logger) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rc, err := dockerCli.ImageSave(ctx, []string{image})
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	return CopyToFile(destination, rc)
+}
+
+//ImageSave save image to tar file
+// destination destination file name eg. /tmp/xxx.tar
+func ImageLoad(dockerCli *client.Client, tarFile string, logger event.Logger) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	reader, err := os.OpenFile(tarFile, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	_, err = dockerCli.ImageLoad(ctx, reader, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//ImageImport save image to tar file
+// source source file name eg. /tmp/xxx.tar
+func ImageImport(dockerCli *client.Client, image, source string, logger event.Logger) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	file, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	isource := types.ImageImportSource{
+		Source:     file,
+		SourceName: "-",
+	}
+
+	options := types.ImageImportOptions{}
+
+	readcloser, err := dockerCli.ImageImport(ctx, isource, image, options)
+	if err != nil {
+		return err
+	}
+	if readcloser != nil {
+		defer readcloser.Close()
+		r := bufio.NewReader(readcloser)
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			if line, _, err := r.ReadLine(); err == nil {
+				if logger != nil {
+					logger.Debug(string(line), map[string]string{"step": "progress"})
+				} else {
+					fmt.Println(string(line))
+				}
+			} else {
+				if err.Error() == "EOF" {
+					return nil
+				}
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// CopyToFile writes the content of the reader to the specified file
+func CopyToFile(outfile string, r io.Reader) error {
+	// We use sequential file access here to avoid depleting the standby list
+	// on Windows. On Linux, this is a call directly to ioutil.TempFile
+	tmpFile, err := os.OpenFile(path.Join(filepath.Dir(outfile), ".docker_temp_"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	_, err = io.Copy(tmpFile, r)
+	tmpFile.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err = os.Rename(tmpPath, outfile); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
+//ImageRemove remove image
+func ImageRemove(dockerCli *client.Client, image string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := dockerCli.ImageRemove(ctx, image, types.ImageRemoveOptions{})
+	return err
 }

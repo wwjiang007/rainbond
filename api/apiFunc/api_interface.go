@@ -37,6 +37,7 @@ type TenantInterface interface {
 	SingleTenantResources(w http.ResponseWriter, r *http.Request)
 	GetSupportProtocols(w http.ResponseWriter, r *http.Request)
 	TransPlugins(w http.ResponseWriter, r *http.Request)
+	ServicesCount(w http.ResponseWriter, r *http.Request)
 }
 
 //ServiceInterface ServiceInterface
@@ -55,6 +56,7 @@ type ServiceInterface interface {
 	PutPorts(w http.ResponseWriter, r *http.Request)
 	PortOuterController(w http.ResponseWriter, r *http.Request)
 	PortInnerController(w http.ResponseWriter, r *http.Request)
+	ChangeLBPort(w http.ResponseWriter, r *http.Request)
 	RollBack(w http.ResponseWriter, r *http.Request)
 	AddVolume(w http.ResponseWriter, r *http.Request)
 	DeleteVolume(w http.ResponseWriter, r *http.Request)
@@ -65,6 +67,7 @@ type ServiceInterface interface {
 	NodeLabel(w http.ResponseWriter, r *http.Request)
 	Share(w http.ResponseWriter, r *http.Request)
 	ShareResult(w http.ResponseWriter, r *http.Request)
+	BuildVersionInfo(w http.ResponseWriter, r *http.Request)
 }
 
 //EntranceInterface EntranceInterface
@@ -114,6 +117,8 @@ type PluginInterface interface {
 	GePluginEnvWhichCanBeSet(w http.ResponseWriter, r *http.Request)
 	UpdateVersionEnv(w http.ResponseWriter, r *http.Request)
 	GetPluginDefaultEnvs(w http.ResponseWriter, r *http.Request)
+	SharePlugin(w http.ResponseWriter, r *http.Request)
+	SharePluginResult(w http.ResponseWriter, r *http.Request)
 }
 
 //RulesInterface RulesInterface
@@ -130,4 +135,12 @@ type SourcesInterface interface {
 	DeleteDefineSource(w http.ResponseWriter, r *http.Request)
 	GetDefineSource(w http.ResponseWriter, r *http.Request)
 	UpdateDefineSource(w http.ResponseWriter, r *http.Request)
+}
+
+type AppInterface interface {
+	ExportApp(w http.ResponseWriter, r *http.Request)
+	Download(w http.ResponseWriter, r *http.Request)
+	Upload(w http.ResponseWriter, r *http.Request)
+	ImportID(w http.ResponseWriter, r *http.Request)
+	ImportApp(w http.ResponseWriter, r *http.Request)
 }

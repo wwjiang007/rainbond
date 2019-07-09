@@ -34,13 +34,13 @@ func TestTenantDao(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// err := GetManager().TenantDao().AddModel(&model.Tenants{
-	// 	Name: "barnett3",
-	// 	UUID: util.NewUUID(),
-	// })
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	err := GetManager().TenantDao().AddModel(&model.Tenants{
+		Name: "barnett4",
+		UUID: util.NewUUID(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	tenant, err := GetManager().TenantDao().GetTenantByUUID("27bbdd119b24444696dc51aa2f41eef8")
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,73 @@ func TestGetMem(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	var rc []string
-	a, b, err := GetManager().TenantServiceDao().GetCPUAndMEM(rc)
-	t.Log(a, b, err)
+}
+
+func TestCockroachDBCreateTable(t *testing.T) {
+	if err := CreateManager(dbconfig.Config{
+		MysqlConnectionInfo: "postgresql://root@localhost:5432/region?sslmode=disable",
+		DBType:              "cockroachdb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestCockroachDBCreateService(t *testing.T) {
+	if err := CreateManager(dbconfig.Config{
+		MysqlConnectionInfo: "postgresql://root@localhost:5432/region?sslmode=disable",
+		DBType:              "cockroachdb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := GetManager().TenantServiceDao().AddModel(&model.TenantServices{
+		TenantID:     "asdasd",
+		ServiceID:    "asdasdasdasd",
+		ServiceAlias: "grasdasdasdads",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCockroachDBDeleteService(t *testing.T) {
+	if err := CreateManager(dbconfig.Config{
+		MysqlConnectionInfo: "postgresql://root@localhost:5432/region?sslmode=disable",
+		DBType:              "cockroachdb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := GetManager().TenantServiceDao().DeleteServiceByServiceID("asdasdasdasd")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCockroachDBSaveDeployInfo(t *testing.T) {
+	if err := CreateManager(dbconfig.Config{
+		MysqlConnectionInfo: "postgresql://root@localhost:5432/region?sslmode=disable",
+		DBType:              "cockroachdb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := GetManager().K8sDeployReplicationDao().AddModel(&model.K8sDeployReplication{
+		TenantID:        "asdasd",
+		ServiceID:       "asdasdasdasd",
+		ReplicationID:   "asdasdadsasdasdasd",
+		ReplicationType: model.TypeReplicationController,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCockroachDBDeleteDeployInfo(t *testing.T) {
+	if err := CreateManager(dbconfig.Config{
+		MysqlConnectionInfo: "postgresql://root@localhost:5432/region?sslmode=disable",
+		DBType:              "cockroachdb",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := GetManager().K8sDeployReplicationDao().DeleteK8sDeployReplication("asdasdadsasdasdasd")
+	if err != nil {
+		t.Fatal(err)
+	}
 }

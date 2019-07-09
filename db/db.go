@@ -33,6 +33,7 @@ type Manager interface {
 	CloseManager() error
 	Begin() *gorm.DB
 	LicenseDao() dao.LicenseDao
+	AppDao() dao.AppDao
 	TenantDao() dao.TenantDao
 	TenantDaoTransactions(db *gorm.DB) dao.TenantDao
 	EventLogDao() dao.EventLogDao
@@ -97,6 +98,9 @@ type Manager interface {
 	RegionAPIClassDaoTransactions(db *gorm.DB) dao.RegionAPIClassDao
 
 	RegionProcotolsDao() dao.RegionProcotolsDao
+
+	NotificationEventDao() dao.NotificationEventDao
+	AppBackupDao() dao.AppBackupDao
 }
 
 var defaultManager Manager

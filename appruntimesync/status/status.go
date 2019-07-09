@@ -116,14 +116,18 @@ func (s *Manager) checkStatus() {
 			deployInfo, err := db.GetManager().K8sDeployReplicationDao().GetK8sDeployReplicationByService(serviceID)
 			if err != nil {
 				if err == gorm.ErrRecordNotFound {
-					s.SetStatus(serviceID, CLOSED)
+					if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+						s.SetStatus(serviceID, CLOSED)
+					}
 					continue
 				}
 				logrus.Error("get deploy info error where check application status.", err.Error())
 				continue
 			}
 			if deployInfo == nil || len(deployInfo) == 0 {
-				s.SetStatus(serviceID, CLOSED)
+				if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+					s.SetStatus(serviceID, CLOSED)
+				}
 				continue
 			}
 			switch deployInfo[0].ReplicationType {
@@ -132,7 +136,9 @@ func (s *Manager) checkStatus() {
 					d, err := s.ClientSet.AppsV1beta1().Deployments(deployInfo[0].TenantID).Get(deployInfo[0].ReplicationID, metav1.GetOptions{})
 					if err != nil {
 						if strings.HasSuffix(err.Error(), "not found") {
-							s.SetStatus(serviceID, CLOSED)
+							if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+								s.SetStatus(serviceID, CLOSED)
+							}
 							break
 						} else {
 							logrus.Error("get Deployment info from k8s error when check app status.", err.Error())
@@ -155,7 +161,9 @@ func (s *Manager) checkStatus() {
 					d, err := s.ClientSet.Core().ReplicationControllers(deployInfo[0].TenantID).Get(deployInfo[0].ReplicationID, metav1.GetOptions{})
 					if err != nil {
 						if strings.HasSuffix(err.Error(), "not found") {
-							s.SetStatus(serviceID, CLOSED)
+							if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+								s.SetStatus(serviceID, CLOSED)
+							}
 							break
 						} else {
 							logrus.Error("get ReplicationControllers info from k8s error when check app status.", err.Error())
@@ -177,7 +185,9 @@ func (s *Manager) checkStatus() {
 					d, err := s.ClientSet.AppsV1beta1().StatefulSets(deployInfo[0].TenantID).Get(deployInfo[0].ReplicationID, metav1.GetOptions{})
 					if err != nil {
 						if strings.HasSuffix(err.Error(), "not found") {
-							s.SetStatus(serviceID, CLOSED)
+							if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+								s.SetStatus(serviceID, CLOSED)
+							}
 							break
 						} else {
 							logrus.Error("get StatefulSets info from k8s error when check app status.", err.Error())
@@ -201,7 +211,9 @@ func (s *Manager) checkStatus() {
 					d, err := s.ClientSet.Core().ReplicationControllers(deployInfo[0].TenantID).Get(deployInfo[0].ReplicationID, metav1.GetOptions{})
 					if err != nil {
 						if strings.HasSuffix(err.Error(), "not found") {
-							s.SetStatus(serviceID, CLOSED)
+							if s.GetStatus(serviceID) != UNDEPLOY && s.GetStatus(serviceID) != DEPLOYING {
+								s.SetStatus(serviceID, CLOSED)
+							}
 							break
 						} else {
 							logrus.Error("get ReplicationControllers info from k8s error when check app status.", err.Error())
@@ -260,6 +272,7 @@ func (s *Manager) GetStatus(serviceID string) string {
 	if status, ok := s.status[serviceID]; ok {
 		return status
 	}
+	s.CheckStatus(serviceID)
 	return "unknow"
 }
 

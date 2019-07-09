@@ -18,7 +18,11 @@
 
 package dao
 
-import "github.com/goodrain/rainbond/db/model"
+import (
+	"time"
+
+	"github.com/goodrain/rainbond/db/model"
+)
 
 //Dao 数据持久化层接口
 type Dao interface {
@@ -40,6 +44,14 @@ type TenantDao interface {
 	GetTenantByEid(eid string) ([]*model.Tenants, error)
 	GetPagedTenants(offset, len int) ([]*model.Tenants, error)
 	GetTenantIDsByNames(names []string) ([]string, error)
+	GetTenantByUUIDIsExist(uuid string) (bool)
+}
+
+//TenantDao tenant dao
+type AppDao interface {
+	Dao
+	GetByEventId(eventID string) (*model.AppStatus, error)
+	DeleteModelByEventId(eventID string) error
 }
 
 //LicenseDao LicenseDao
@@ -54,6 +66,10 @@ type EventLogDao interface {
 	Dao
 	GetEventLogMessages(eventID string) ([]*model.EventLogMessage, error)
 	DeleteServiceLog(serviceID string) error
+	DeleteServiceEventLog(obj *model.EventLogMessage) error
+	GetAllServiceEventLog() ([]*model.EventLogMessage, error)
+	DeleteServiceEventLogByEventId(eventId string) error
+
 }
 
 //TenantServiceDao TenantServiceDao
@@ -69,14 +85,15 @@ type TenantServiceDao interface {
 	DeleteServiceByServiceID(serviceID string) error
 	GetServiceMemoryByTenantIDs(tenantIDs, serviceIDs []string) (map[string]map[string]interface{}, error)
 	GetServiceMemoryByServiceIDs(serviceIDs []string) (map[string]map[string]interface{}, error)
-	GetPagedTenantService(offset, len int) ([]map[string]interface{}, error)
-	GetTenantServiceRes(uuid string) (map[string]interface{}, error)
+	GetPagedTenantService(offset, len int, serviceIDs []string) ([]map[string]interface{}, int, error)
 	GetAllServices() ([]*model.TenantServices, error)
 }
 
 //TenantServiceDeleteDao TenantServiceDeleteDao
 type TenantServiceDeleteDao interface {
 	Dao
+	GetTenantServicesDeleteByCreateTime(createTime time.Time) ([]*model.TenantServicesDelete, error)
+	DeleteTenantServicesDelete(record *model.TenantServicesDelete) error
 }
 
 //TenantServicesPortDao TenantServicesPortDao
@@ -118,6 +135,8 @@ type TenantPluginBuildVersionDao interface {
 	DeleteBuildVersionByPluginID(pluginID string) error
 	GetBuildVersionByPluginID(pluginID string) ([]*model.TenantPluginBuildVersion, error)
 	GetBuildVersionByVersionID(pluginID, versionID string) (*model.TenantPluginBuildVersion, error)
+	GetLastBuildVersionByVersionID(pluginID, versionID string) (*model.TenantPluginBuildVersion, error)
+	GetBuildVersionByDeployVersion(pluginID, versionID, deployVersion string) (*model.TenantPluginBuildVersion, error)
 }
 
 //TenantPluginVersionEnvDao TenantPluginVersionEnvDao
@@ -211,9 +230,11 @@ type TenantServiceVolumeDao interface {
 type TenantServiceLBMappingPortDao interface {
 	Dao
 	GetTenantServiceLBMappingPort(serviceID string, containerPort int) (*model.TenantServiceLBMappingPort, error)
-	GetTenantServiceLBMappingPortByService(serviceID string) (*model.TenantServiceLBMappingPort, error)
+	GetTenantServiceLBMappingPortByService(serviceID string) ([]*model.TenantServiceLBMappingPort, error)
 	CreateTenantServiceLBMappingPort(serviceID string, containerPort int) (*model.TenantServiceLBMappingPort, error)
 	DELServiceLBMappingPortByServiceID(serviceID string) error
+	DELServiceLBMappingPortByServiceIDAndPort(serviceID string, lbPort int) error
+	GetLBPortByTenantAndPort(tenantID string, lbport int) (*model.TenantServiceLBMappingPort, error)
 }
 
 //TenantServiceLabelDao TenantServiceLabelDao
@@ -238,6 +259,8 @@ type K8sServiceDao interface {
 	GetK8sServiceByReplicationIDAndPort(replicationID string, port int, isOut bool) (*model.K8sService, error)
 	DeleteK8sServiceByReplicationIDAndPort(replicationID string, port int, isOut bool) error
 	DeleteK8sServiceByName(k8sServiceName string) error
+	GetAllK8sService() ([]*model.K8sService, error)
+	K8sServiceIsExist(tenantId string, K8sServiceID string) bool
 }
 
 //K8sDeployReplicationDao 部署信息
@@ -249,10 +272,13 @@ type K8sDeployReplicationDao interface {
 	GetK8sDeployReplicationByService(serviceID string) ([]*model.K8sDeployReplication, error)
 	GetK8sCurrentDeployReplicationByService(serviceID string) (*model.K8sDeployReplication, error)
 	DeleteK8sDeployReplicationByServiceAndVersion(serviceID, version string) error
+	DeleteK8sDeployReplicationByServiceAndMarked(serviceID string) error
 	//不真正删除，设置IS_DELETE 为true
 	DeleteK8sDeployReplicationByService(serviceID string) error
 	GetReplications() ([]*model.K8sDeployReplication, error)
 	BeachDelete([]uint) error
+	GetK8sDeployReplicationByIsDelete(rcType string, isDelete bool) ([]*model.K8sDeployReplication, error)
+	GetK8sDeployReplicationIsExist(tenantId string, RcType string, RcId string, isDelete bool) (IsExist bool)
 }
 
 //K8sPodDao pod info dao
@@ -310,6 +336,7 @@ type EventDao interface {
 	GetEventByEventID(eventID string) (*model.ServiceEvent, error)
 	GetEventByEventIDs(eventIDs []string) ([]*model.ServiceEvent, error)
 	GetEventByServiceID(serviceID string) ([]*model.ServiceEvent, error)
+	DelEventByServiceID(serviceID string) (error)
 }
 
 //VersionInfoDao VersionInfoDao
@@ -319,6 +346,11 @@ type VersionInfoDao interface {
 	GetVersionByDeployVersion(version, serviceID string) (*model.VersionInfo, error)
 	GetVersionByServiceID(serviceID string) ([]*model.VersionInfo, error)
 	DeleteVersionByEventID(eventID string) error
+	DeleteVersionByServiceID(serviceID string) error
+	GetVersionInfo(timePoint time.Time, serviceIdList []string) ([]*model.VersionInfo, error)
+	DeleteVersionInfo(obj *model.VersionInfo) error
+	DeleteFailureVersionInfo(timePoint time.Time, status string, serviceIdList []string) error
+	SearchVersionInfo() ([]*model.VersionInfo, error)
 }
 
 //RegionUserInfoDao UserRegionInfoDao
@@ -326,6 +358,7 @@ type RegionUserInfoDao interface {
 	Dao
 	GetALLTokenInValidityPeriod() ([]*model.RegionUserInfo, error)
 	GetTokenByEid(eid string) (*model.RegionUserInfo, error)
+	GetTokenByTokenID(token string) (*model.RegionUserInfo, error)
 }
 
 //RegionAPIClassDao RegionAPIClassDao
@@ -340,4 +373,24 @@ type RegionProcotolsDao interface {
 	Dao
 	GetAllSupportProtocol(version string) ([]*model.RegionProcotols, error)
 	GetProtocolGroupByProtocolChild(version, protocolChild string) (*model.RegionProcotols, error)
+}
+
+//NotificationEventDao NotificationEventDao
+type NotificationEventDao interface {
+	Dao
+	GetNotificationEventByHash(hash string) (*model.NotificationEvent, error)
+	GetNotificationEventByKind(kind, kindID string) ([]*model.NotificationEvent, error)
+	GetNotificationEventByTime(start, end time.Time) ([]*model.NotificationEvent, error)
+	GetNotificationEventNotHandle() ([]*model.NotificationEvent, error)
+}
+
+//AppBackupDao group app backup history
+type AppBackupDao interface {
+	Dao
+	CheckHistory(groupID, version string) bool
+	GetAppBackups(groupID string) ([]*model.AppBackup, error)
+	DeleteAppBackup(backupID string) error
+	GetAppBackup(backupID string) (*model.AppBackup, error)
+	GetDeleteAppBackup(backupID string) (*model.AppBackup, error)
+	GetDeleteAppBackups() ([]*model.AppBackup, error)
 }
