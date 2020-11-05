@@ -19,12 +19,15 @@
 package option
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"github.com/goodrain/rainbond/api/region"
+	"github.com/goodrain/rainbond/builder/sources"
 	"github.com/urfave/cli"
+	yaml "gopkg.in/yaml.v2"
 	//"strings"
 )
 
@@ -32,55 +35,46 @@ var config Config
 
 //Config Config
 type Config struct {
-	RegionMysql   RegionMysql `json:"RegionMysql"`
-	Kubernets     Kubernets   `json:"Kubernets"`
-	RegionAPI     RegionAPI   `json:"RegionAPI"`
-	DockerLogPath string      `json:"DockerLogPath"`
+	Kubernets     Kubernets      `yaml:"kube"`
+	RegionAPI     region.APIConf `yaml:"region_api"`
+	DockerLogPath string         `yaml:"docker_log_path"`
 }
 
 //RegionMysql RegionMysql
 type RegionMysql struct {
-	URL      string `json:"URL"`
-	Pass     string `json:"Pass"`
-	User     string `json:"User"`
-	Database string `json:"Database"`
+	URL      string `yaml:"url"`
+	Pass     string `yaml:"pass"`
+	User     string `yaml:"user"`
+	Database string `yaml:"database"`
 }
 
 //Kubernets Kubernets
 type Kubernets struct {
-	Master string
-}
-
-//RegionAPI RegionAPI
-type RegionAPI struct {
-	URL   string
-	Token string
-	Type  string
+	KubeConf string `yaml:"kube-conf"`
 }
 
 //LoadConfig 加载配置
 func LoadConfig(ctx *cli.Context) (Config, error) {
 	config = Config{
-		RegionAPI: RegionAPI{
-			URL: "http://127.0.0.1:8888",
-		},
-		RegionMysql: RegionMysql{
-			User:     os.Getenv("MYSQL_USER"),
-			Pass:     os.Getenv("MYSQL_PASS"),
-			URL:      os.Getenv("MYSQL_URL"),
-			Database: os.Getenv("MYSQL_DB"),
+		RegionAPI: region.APIConf{
+			Endpoints: []string{"http://127.0.0.1:8888"},
 		},
 	}
-	_, err := os.Stat(ctx.GlobalString("config"))
+	configfile := ctx.GlobalString("config")
+	if configfile == "" {
+		home, _ := sources.Home()
+		configfile = path.Join(home, ".rbd", "grctl.yaml")
+	}
+	_, err := os.Stat(configfile)
 	if err != nil {
-		return config, err
+		return config, nil
 	}
-	data, err := ioutil.ReadFile(ctx.GlobalString("config"))
+	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		logrus.Warning("Read config file error ,will get config from region.", err.Error())
 		return config, err
 	}
-	if err := json.Unmarshal(data, &config); err != nil {
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		logrus.Warning("Read config file error ,will get config from region.", err.Error())
 		return config, err
 	}
@@ -90,4 +84,15 @@ func LoadConfig(ctx *cli.Context) (Config, error) {
 //GetConfig GetConfig
 func GetConfig() Config {
 	return config
+}
+
+// Get TenantNamePath
+func GetTenantNamePath() (tenantnamepath string, err error) {
+	home, err := sources.Home()
+	if err != nil {
+		logrus.Warn("Get Home Dir error.", err.Error())
+		return tenantnamepath, err
+	}
+	tenantnamepath = path.Join(home, ".rbd", "tenant.txt")
+	return tenantnamepath, err
 }

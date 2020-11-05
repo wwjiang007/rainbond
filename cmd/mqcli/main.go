@@ -20,19 +20,22 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"time"
 
-	"github.com/goodrain/rainbond/pkg/mq/api/grpc/client"
-	"github.com/goodrain/rainbond/pkg/mq/api/grpc/pb"
+	"github.com/goodrain/rainbond/mq/api/grpc/pb"
+	"github.com/goodrain/rainbond/mq/client"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
 var server string
 var topic string
 var taskbody string
+var taskfile string
 var tasktype string
 var mode string
 
@@ -46,6 +49,11 @@ func main() {
 	}
 	defer c.Close()
 	if mode == "enqueue" {
+		if taskbody == "" && taskfile != "" {
+			body, _ := ioutil.ReadFile(taskfile)
+			taskbody = string(body)
+		}
+		fmt.Println("taskbody:" + taskbody)
 		re, err := c.Enqueue(context.Background(), &pb.EnqueueRequest{
 			Topic: topic,
 			Message: &pb.TaskMessage{
@@ -79,6 +87,7 @@ func AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&server, "server", "127.0.0.1:6300", "mq server")
 	fs.StringVar(&topic, "topic", "builder", "mq topic")
 	fs.StringVar(&taskbody, "task-body", "", "mq task body")
+	fs.StringVar(&taskfile, "task-file", "", "mq task body file")
 	fs.StringVar(&tasktype, "task-type", "", "mq task type")
 	fs.StringVar(&mode, "mode", "enqueue", "mq task type")
 }

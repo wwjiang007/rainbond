@@ -24,23 +24,35 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/goodrain/rainbond/api/controller"
+	"github.com/goodrain/rainbond/api/db"
+	"github.com/goodrain/rainbond/api/discover"
+	"github.com/goodrain/rainbond/api/handler"
+	"github.com/goodrain/rainbond/api/server"
 	"github.com/goodrain/rainbond/cmd/api/option"
-	"github.com/goodrain/rainbond/pkg/api/controller"
-	"github.com/goodrain/rainbond/pkg/api/db"
-	"github.com/goodrain/rainbond/pkg/api/discover"
-	"github.com/goodrain/rainbond/pkg/api/handler"
-	"github.com/goodrain/rainbond/pkg/api/server"
-	"github.com/goodrain/rainbond/pkg/appruntimesync/client"
-	"github.com/goodrain/rainbond/pkg/event"
+	"github.com/goodrain/rainbond/event"
+	etcdutil "github.com/goodrain/rainbond/util/etcd"
+	k8sutil "github.com/goodrain/rainbond/util/k8s"
+	"github.com/goodrain/rainbond/worker/client"
+	"k8s.io/client-go/kubernetes"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 //Run start run
 func Run(s *option.APIServer) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	errChan := make(chan error)
+	etcdClientArgs := &etcdutil.ClientArgs{
+		Endpoints: s.Config.EtcdEndpoint,
+		CaFile:    s.Config.EtcdCaFile,
+		CertFile:  s.Config.EtcdCertFile,
+		KeyFile:   s.Config.EtcdKeyFile,
+	}
 	//启动服务发现
-	if _, err := discover.CreateEndpointDiscover(s.Config.EtcdEndpoint); err != nil {
+	if _, err := discover.CreateEndpointDiscover(etcdClientArgs); err != nil {
 		return err
 	}
 	//创建db manager
@@ -52,25 +64,43 @@ func Run(s *option.APIServer) error {
 	if err := db.CreateEventManager(s.Config); err != nil {
 		logrus.Debugf("create event manager error, %v", err)
 	}
-
-	if err := event.NewManager(event.EventConfig{EventLogServers: s.Config.EventLogServers}); err != nil {
+	config, err := k8sutil.NewRestConfig(s.KubeConfigPath)
+	if err != nil {
+		return err
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := event.NewManager(event.EventConfig{
+		EventLogServers: s.Config.EventLogServers,
+		DiscoverArgs:    etcdClientArgs,
+	}); err != nil {
 		return err
 	}
 	defer event.CloseManager()
 	//create app status client
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	cli, err := client.NewClient(ctx, client.AppRuntimeSyncClientConf{
 		EtcdEndpoints: s.Config.EtcdEndpoint,
+		EtcdCaFile:    s.Config.EtcdCaFile,
+		EtcdCertFile:  s.Config.EtcdCertFile,
+		EtcdKeyFile:   s.Config.EtcdKeyFile,
 	})
 	if err != nil {
 		logrus.Errorf("create app status client error, %v", err)
 		return err
 	}
+
+	etcdcli, err := etcdutil.NewClient(ctx, etcdClientArgs)
+	if err != nil {
+		logrus.Errorf("create etcd client v3 error, %v", err)
+		return err
+	}
+
 	//初始化 middleware
 	handler.InitProxy(s.Config)
 	//创建handle
-	if err := handler.InitHandle(s.Config, cli); err != nil {
+	if err := handler.InitHandle(s.Config, etcdClientArgs, cli, etcdcli, clientset); err != nil {
 		logrus.Errorf("init all handle error, %v", err)
 		return err
 	}
@@ -79,7 +109,7 @@ func Run(s *option.APIServer) error {
 		logrus.Errorf("create v2 route manager error, %v", err)
 	}
 	// 启动api
-	apiManager := server.NewManager(s.Config)
+	apiManager := server.NewManager(s.Config, etcdcli)
 	if err := apiManager.Start(); err != nil {
 		return err
 	}

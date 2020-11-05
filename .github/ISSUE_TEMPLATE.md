@@ -1,30 +1,13 @@
-Before filling this issue, please read the [manual](https://www.rainbond.com/docs/stable/) and search if the bug do not already exists in the database (https://github.com/goodrain/rainbond/issues).
+【需求描述】(非需求请删除本行)
+ 
+【BUG描述】(非BUG请删除本行)
 
-**Is this a BUG REPORT or FEATURE REQUEST ?**:
+【部署环境】
+- Rainbond版本(执行`grctl version`获取): [请填写此处]
+- 操作系统类型和版本:[请填写此处]
+- 离线部署/网络开放：[请填写此处]
 
-> Uncomment only one, leave it on its own line: 
->
-> bug
-> feature
-> 
-
-**Description**
-
-For a bug: Describe the bug and list the steps you used when the issue occurred.
-For a feature: Describe your needs.
-
-
-**What happened**:
-
-**What you expected to happen**:
-
-**How to reproduce it (as minimally and precisely as possible)**:
-
-**Environment**:
-- rainbond version:
-- Cloud provider or hardware configuration:
-- OS (e.g. from /etc/os-release):
-- Kernel (e.g. `uname -a`):
-- docker image version:
-- grctl version:
-- Others:
+-------------------------以下内容请阅读后删除-----------------------------
+如果你想提交一个BUG，请优先查看已经存在的BUG提交是否与你的问题一致。
+如果你想提交一个需求建议，请详细描述你的场景。
+如果你想咨询Rainbond的使用场景，还可以参阅[Rainbond用户社区](https://t.goodrain.com/)，[Rainbond用户文档](https://www.rainbond.com/docs/)或添加微信群与我们实时沟通；

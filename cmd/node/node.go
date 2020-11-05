@@ -23,6 +23,9 @@ import (
 	"os"
 
 	"github.com/goodrain/rainbond/cmd"
+
+	"github.com/spf13/pflag"
+
 	"github.com/goodrain/rainbond/cmd/node/option"
 	"github.com/goodrain/rainbond/cmd/node/server"
 )
@@ -31,7 +34,13 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "version" {
 		cmd.ShowVersion("node")
 	}
-	option.Init()
+	server.ParseClientCommnad(os.Args)
+	option.Config.AddFlags(pflag.CommandLine)
+	server.InstallServiceFlags(pflag.CommandLine)
+	if err := option.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "init config error: %v\n", err)
+		os.Exit(1)
+	}
 	if err := server.Run(option.Config); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

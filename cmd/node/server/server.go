@@ -19,186 +19,172 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"github.com/goodrain/rainbond/discover.v2"
+	"github.com/goodrain/rainbond/node/initiate"
+	"github.com/goodrain/rainbond/util/constants"
+	"k8s.io/client-go/kubernetes"
 	"os"
+	"os/signal"
 	"syscall"
 
 	"github.com/goodrain/rainbond/cmd/node/option"
-	"github.com/goodrain/rainbond/pkg/node/api/controller"
-	"github.com/goodrain/rainbond/pkg/node/core/job"
-	"github.com/goodrain/rainbond/pkg/node/core/k8s"
-	"github.com/goodrain/rainbond/pkg/node/core/store"
-	"github.com/goodrain/rainbond/pkg/node/masterserver"
-	"github.com/goodrain/rainbond/pkg/node/monitormessage"
-	"github.com/goodrain/rainbond/pkg/node/nodeserver"
-	"github.com/goodrain/rainbond/pkg/node/statsd"
-	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/client-go/pkg/api/v1"
+	eventLog "github.com/goodrain/rainbond/event"
+	"github.com/goodrain/rainbond/node/api"
+	"github.com/goodrain/rainbond/node/api/controller"
+	"github.com/goodrain/rainbond/node/core/store"
+	"github.com/goodrain/rainbond/node/kubecache"
+	"github.com/goodrain/rainbond/node/masterserver"
+	"github.com/goodrain/rainbond/node/nodem"
+	"github.com/goodrain/rainbond/node/nodem/docker"
+	"github.com/goodrain/rainbond/node/nodem/envoy"
+	etcdutil "github.com/goodrain/rainbond/util/etcd"
+	k8sutil "github.com/goodrain/rainbond/util/k8s"
 
-	"github.com/Sirupsen/logrus"
-
-	eventLog "github.com/goodrain/rainbond/pkg/event"
-
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
-	"os/exec"
-	"os/signal"
-	"strconv"
-	"strings"
-
-	"github.com/goodrain/rainbond/pkg/node/api"
+	"github.com/sirupsen/logrus"
 )
 
 //Run start run
-func Run(c *option.Conf) error {
-	errChan := make(chan error, 1)
-	err := eventLog.NewManager(eventLog.EventConfig{
-		EventLogServers: c.EventLogServer,
-		DiscoverAddress: c.Etcd.Endpoints,
-	})
-	if err != nil {
-		logrus.Errorf("error creating eventlog manager")
+func Run(cfg *option.Conf) error {
+	var stoped = make(chan struct{})
+	stopfunc := func() error {
+		close(stoped)
 		return nil
 	}
-	defer eventLog.CloseManager()
+	startfunc := func() error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	// init etcd client
-	if err = store.NewClient(c); err != nil {
-		return fmt.Errorf("Connect to ETCD %s failed: %s",
-			c.Etcd.Endpoints, err)
-	}
-	if c.K8SConfPath != "" {
-		if err := k8s.NewK8sClient(c); err != nil {
-			return fmt.Errorf("Connect to K8S %s failed: %s",
-				c.K8SConfPath, err)
+		etcdClientArgs := &etcdutil.ClientArgs{
+			Endpoints:   cfg.EtcdEndpoints,
+			CaFile:      cfg.EtcdCaFile,
+			CertFile:    cfg.EtcdCertFile,
+			KeyFile:     cfg.EtcdKeyFile,
+			DialTimeout: cfg.EtcdDialTimeout,
 		}
-	} else {
-		return fmt.Errorf("Connect to K8S %s failed: kubeconfig file not found",
-			c.K8SConfPath)
-	}
+		if err := cfg.ParseClient(ctx, etcdClientArgs); err != nil {
+			return fmt.Errorf("config parse error:%s", err.Error())
+		}
 
-	s, err := nodeserver.NewNodeServer(c) //todo 配置文件 done
-	if err != nil {
-		return err
-	}
-	if err := s.Run(); err != nil {
-		logrus.Errorf(err.Error())
-		return err
-	}
-	defer s.Stop(nil)
-	//master服务在node服务之后启动
-	var ms *masterserver.MasterServer
-	if c.RunMode == "master" {
-		ms, err = masterserver.NewMasterServer(s.HostNode, k8s.K8S.Clientset)
+		config, err := k8sutil.NewRestConfig(cfg.K8SConfPath)
 		if err != nil {
-			logrus.Errorf(err.Error())
 			return err
 		}
-		if !s.HostNode.Role.HasRule("compute") {
-			getInfoForMaster(s)
-		}
-		ms.Cluster.UpdateNode(s.HostNode)
-		if err := ms.Start(errChan); err != nil {
-			logrus.Errorf(err.Error())
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
 			return err
 		}
-		defer ms.Stop(nil)
-	}
-	//statsd exporter
-	registry := prometheus.NewRegistry()
-	exporter := statsd.CreateExporter(c.StatsdConfig, registry)
-	if err := exporter.Start(); err != nil {
-		logrus.Errorf("start statsd exporter server error,%s", err.Error())
-		return err
-	}
-	meserver := monitormessage.CreateUDPServer("0.0.0.0", 6666)
-	if err := meserver.Start(); err != nil {
-		return err
-	}
-	//启动API服务
-	apiManager := api.NewManager(*s.Conf, s.HostNode, ms, exporter)
-	if err := apiManager.Start(errChan); err != nil {
-		return err
-	}
-	defer apiManager.Stop()
 
-	defer job.Exit(nil)
-	defer controller.Exist(nil)
-	defer option.Exit(nil)
-	//step finally: listen Signal
-	term := make(chan os.Signal)
-	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-term:
-		logrus.Warn("Received SIGTERM, exiting gracefully...")
-	case err := <-errChan:
-		logrus.Errorf("Received a error %s, exiting gracefully...", err.Error())
+		k8sDiscover := discover.NewK8sDiscover(ctx, clientset, cfg)
+		defer k8sDiscover.Stop()
+
+		nodemanager, err := nodem.NewNodeManager(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("create node manager failed: %s", err)
+		}
+		if err := nodemanager.InitStart(); err != nil {
+			return err
+		}
+
+		err = eventLog.NewManager(eventLog.EventConfig{
+			EventLogServers: cfg.EventLogServer,
+			DiscoverArgs:    etcdClientArgs,
+		})
+		if err != nil {
+			logrus.Errorf("error creating eventlog manager")
+			return nil
+		}
+		defer eventLog.CloseManager()
+		logrus.Debug("create and start event log client success")
+
+		kubecli, err := kubecache.NewKubeClient(cfg, clientset)
+		if err != nil {
+			return err
+		}
+		defer kubecli.Stop()
+
+		if cfg.ImageRepositoryHost == constants.DefImageRepository {
+			hostManager, err := initiate.NewHostManager(cfg, k8sDiscover)
+			if err != nil {
+				return fmt.Errorf("create new host manager: %v", err)
+			}
+			hostManager.Start()
+		}
+
+		logrus.Debugf("rbd-namespace=%s; rbd-docker-secret=%s", os.Getenv("RBD_NAMESPACE"), os.Getenv("RBD_DOCKER_SECRET"))
+		// sync docker inscure registries cert info into all rainbond node
+		if err = docker.SyncDockerCertFromSecret(clientset, os.Getenv("RBD_NAMESPACE"), os.Getenv("RBD_DOCKER_SECRET")); err != nil { // TODO fanyangyang namespace secretname
+			return fmt.Errorf("sync docker cert from secret error: %s", err.Error())
+		}
+
+		// init etcd client
+		if err = store.NewClient(ctx, cfg, etcdClientArgs); err != nil {
+			return fmt.Errorf("Connect to ETCD %s failed: %s", cfg.EtcdEndpoints, err)
+		}
+		errChan := make(chan error, 3)
+		if err := nodemanager.Start(errChan); err != nil {
+			return fmt.Errorf("start node manager failed: %s", err)
+		}
+		defer nodemanager.Stop()
+		logrus.Debug("create and start node manager moudle success")
+
+		//master服务在node服务之后启动
+		var ms *masterserver.MasterServer
+		if cfg.RunMode == "master" {
+			ms, err = masterserver.NewMasterServer(nodemanager.GetCurrentNode(), kubecli)
+			if err != nil {
+				logrus.Errorf(err.Error())
+				return err
+			}
+			ms.Cluster.UpdateNode(nodemanager.GetCurrentNode())
+			if err := ms.Start(errChan); err != nil {
+				logrus.Errorf(err.Error())
+				return err
+			}
+			defer ms.Stop(nil)
+			logrus.Debug("create and start master server moudle success")
+		}
+		//create api manager
+		apiManager := api.NewManager(*cfg, nodemanager.GetCurrentNode(), ms, kubecli)
+		if err := apiManager.Start(errChan); err != nil {
+			return err
+		}
+		if err := nodemanager.AddAPIManager(apiManager); err != nil {
+			return err
+		}
+		defer apiManager.Stop()
+
+		//create service mesh controller
+		grpcserver, err := envoy.CreateDiscoverServerManager(clientset, *cfg)
+		if err != nil {
+			return err
+		}
+		if err := grpcserver.Start(errChan); err != nil {
+			return err
+		}
+		defer grpcserver.Stop()
+
+		logrus.Debug("create and start api server moudle success")
+
+		defer controller.Exist(nil)
+		//step finally: listen Signal
+		term := make(chan os.Signal)
+		signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+		select {
+		case <-stoped:
+			logrus.Infof("windows service stoped..")
+		case <-term:
+			logrus.Warn("Received SIGTERM, exiting gracefully...")
+		case err := <-errChan:
+			logrus.Errorf("Received a error %s, exiting gracefully...", err.Error())
+		}
+		logrus.Info("See you next time!")
+		return nil
 	}
-	logrus.Info("See you next time!")
+	err := initService(cfg, startfunc, stopfunc)
+	if err != nil {
+		return err
+	}
 	return nil
-}
-func getInfoForMaster(s *nodeserver.NodeServer) {
-	resp, err := http.Get("http://repo.goodrain.com/release/3.4.1/gaops/jobs/cron/check/manage/sys.sh")
-	if err != nil {
-		logrus.Errorf("error get sysinfo script,details %s", err.Error())
-		return
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		logrus.Errorf("error get response from sysinfo script,details %s", err.Error())
-		return
-	}
-	cmd := exec.Command("bash", "-c", string(b))
-
-	//cmd := exec.Command("bash", "/usr/share/gr-rainbond-node/gaops/jobs/install/manage/tasks/ex_domain.sh")
-	outbuf := bytes.NewBuffer(nil)
-	cmd.Stderr = outbuf
-	err = cmd.Run()
-	if err != nil {
-		logrus.Infof("err run command ,details %s", err.Error())
-		return
-	}
-	result := make(map[string]string)
-
-	out := outbuf.Bytes()
-	logrus.Infof("get system info is %s ", string(out))
-	err = json.Unmarshal(out, &result)
-	if err != nil {
-		logrus.Infof("err unmarshal shell output ,details %s", err.Error())
-		return
-	}
-	s.HostNode.NodeStatus = &v1.NodeStatus{
-		NodeInfo: v1.NodeSystemInfo{
-			KernelVersion:   result["KERNEL"],
-			Architecture:    result["PLATFORM"],
-			OperatingSystem: result["OS"],
-			KubeletVersion:  "N/A",
-		},
-	}
-	if cpuStr, ok := result["LOGIC_CORES"]; ok {
-		if cpu, err := strconv.Atoi(cpuStr); err == nil {
-			logrus.Infof("server cpu is %v", cpu)
-			s.HostNode.AvailableCPU = int64(cpu)
-			s.HostNode.NodeStatus.Allocatable.Cpu().Set(int64(cpu))
-		}
-	}
-
-	if memStr, ok := result["MEMORY"]; ok {
-		memStr = strings.Replace(memStr, " ", "", -1)
-		memStr = strings.Replace(memStr, "G", "", -1)
-		memStr = strings.Replace(memStr, "B", "", -1)
-		if mem, err := strconv.ParseFloat(memStr, 64); err == nil {
-			s.HostNode.AvailableMemory = int64(mem * 1024 * 1024 * 1024)
-			s.HostNode.NodeStatus.Allocatable.Memory().SetScaled(int64(mem*1024*1024*1024), 0)
-		} else {
-			logrus.Warnf("get master memory info failed ,details %s", err.Error())
-		}
-	}
-	logrus.Infof("memory is %v", s.HostNode.AvailableMemory)
-	s.Update()
-
 }

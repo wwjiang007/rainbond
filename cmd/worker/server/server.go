@@ -19,26 +19,27 @@
 package server
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/eapache/channels"
 	"github.com/goodrain/rainbond/cmd/worker/option"
-	"github.com/goodrain/rainbond/pkg/appruntimesync"
-	"github.com/goodrain/rainbond/pkg/appruntimesync/client"
-	"github.com/goodrain/rainbond/pkg/db"
-	"github.com/goodrain/rainbond/pkg/db/config"
-	"github.com/goodrain/rainbond/pkg/event"
-	"github.com/goodrain/rainbond/pkg/worker/appm"
-	"github.com/goodrain/rainbond/pkg/worker/discover"
-	"github.com/goodrain/rainbond/pkg/worker/executor"
-	"github.com/goodrain/rainbond/pkg/worker/monitor"
-
-	"net/http"
-	_ "net/http/pprof"
-
-	"github.com/Sirupsen/logrus"
+	"github.com/goodrain/rainbond/db"
+	"github.com/goodrain/rainbond/db/config"
+	"github.com/goodrain/rainbond/event"
+	etcdutil "github.com/goodrain/rainbond/util/etcd"
+	k8sutil "github.com/goodrain/rainbond/util/k8s"
+	"github.com/goodrain/rainbond/worker/appm"
+	"github.com/goodrain/rainbond/worker/appm/controller"
+	"github.com/goodrain/rainbond/worker/appm/store"
+	"github.com/goodrain/rainbond/worker/discover"
+	"github.com/goodrain/rainbond/worker/gc"
+	"github.com/goodrain/rainbond/worker/master"
+	"github.com/goodrain/rainbond/worker/monitor"
+	"github.com/goodrain/rainbond/worker/server"
+	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 )
 
 //Run start run
@@ -55,60 +56,82 @@ func Run(s *option.Worker) error {
 		return err
 	}
 	defer db.CloseManager()
-
-	if err := event.NewManager(event.EventConfig{EventLogServers: s.Config.EventLogServers}); err != nil {
+	etcdClientArgs := &etcdutil.ClientArgs{
+		Endpoints: s.Config.EtcdEndPoints,
+		CaFile:    s.Config.EtcdCaFile,
+		CertFile:  s.Config.EtcdCertFile,
+		KeyFile:   s.Config.EtcdKeyFile,
+	}
+	if err := event.NewManager(event.EventConfig{
+		EventLogServers: s.Config.EventLogServers,
+		DiscoverArgs:    etcdClientArgs,
+	}); err != nil {
 		return err
 	}
 	defer event.CloseManager()
 
-	//step 2 : create and start app runtime module
-	ars := appruntimesync.CreateAppRuntimeSync(s.Config)
-	go ars.Start(errChan)
-	defer ars.Stop()
+	//step 2 : create kube client and etcd client
+	restConfig, err := k8sutil.NewRestConfig(s.Config.KubeConfig)
+	if err != nil {
+		logrus.Errorf("create kube rest config error: %s", err.Error())
+		return err
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		logrus.Errorf("create kube client error: %s", err.Error())
+		return err
+	}
+	s.Config.KubeClient = clientset
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	statusClient, err := client.NewClient(ctx, client.AppRuntimeSyncClientConf{
-		EtcdEndpoints: s.Config.EtcdEndPoints,
-	})
-	if err != nil {
+	//step 3: create resource store
+	startCh := channels.NewRingChannel(1024)
+	updateCh := channels.NewRingChannel(1024)
+	probeCh := channels.NewRingChannel(1024)
+	cachestore := store.NewStore(restConfig, clientset, db.GetManager(), s.Config, startCh, probeCh)
+	appmController := appm.NewAPPMController(clientset, cachestore, startCh, updateCh, probeCh)
+	if err := appmController.Start(); err != nil {
+		logrus.Errorf("error starting appm controller: %v", err)
+	}
+	defer appmController.Stop()
+	if err := cachestore.Start(); err != nil {
+		logrus.Error("start kube cache store error", err)
 		return err
 	}
-	appmm, err := appm.NewManager(s.Config, statusClient)
-	if err != nil {
-		return err
-	}
-	defer appmm.Stop()
 
-	if s.RunMode == "sync" {
-		go appmm.SyncData()
-	}
-	//step 3 : create executor module
-	executorManager, err := executor.NewManager(s.Config, statusClient, appmm)
+	//step 4: create controller manager
+	controllerManager := controller.NewManager(cachestore, clientset)
+	defer controllerManager.Stop()
+
+	//step 5 : start runtime master
+	masterCon, err := master.NewMasterController(s.Config, cachestore)
 	if err != nil {
 		return err
 	}
-	executorManager.Start()
-	defer executorManager.Stop()
-	//step 4 : create discover module
-	taskManager := discover.NewTaskManager(s.Config, executorManager, statusClient)
+	if err := masterCon.Start(); err != nil {
+		return err
+	}
+	defer masterCon.Stop()
+
+	//step 6 : create discover module
+	garbageCollector := gc.NewGarbageCollector(clientset)
+	taskManager := discover.NewTaskManager(s.Config, cachestore, controllerManager, garbageCollector, startCh)
 	if err := taskManager.Start(); err != nil {
 		return err
 	}
 	defer taskManager.Stop()
+	//step 7: start app runtimer server
+	runtimeServer := server.CreaterRuntimeServer(s.Config, cachestore, clientset, updateCh)
+	runtimeServer.Start(errChan)
 
-	//step 5 :create application use resource exporter.
-	exporterManager := monitor.NewManager(s.Config, statusClient)
+	//step 8: create application use resource exporter.
+	exporterManager := monitor.NewManager(s.Config, masterCon, controllerManager)
 	if err := exporterManager.Start(); err != nil {
 		return err
 	}
 	defer exporterManager.Stop()
 
-	//step 6 :enable pprof api
-	logrus.Info("pprof api listen port 3229")
-	go http.ListenAndServe(":3229", nil)
-
 	logrus.Info("worker begin running...")
+
 	//step finally: listen Signal
 	term := make(chan os.Signal)
 	signal.Notify(term, os.Interrupt, syscall.SIGTERM)

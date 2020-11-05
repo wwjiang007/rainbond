@@ -1,21 +1,16 @@
 FROM goodrainapps/alpine:3.4
 
-MAINTAINER zengqg@goodrain.com
+LABEL author="zengqg@goodrain.com"
 
-RUN apk --no-cache add openssl git perl openssh-client
+ENV WORK_DIR=/run
 
-ENV PKG_URL="http://goodrain-pkg.oss-cn-shanghai.aliyuncs.com/pkg"
-
-RUN curl $PKG_URL/labor_docker.tar.gz | tar -xzC /usr/bin/
-
-ADD rainbond-chaos /run/rainbond-chaos
-ADD entrypoint.sh /run/entrypoint.sh
-ADD build.pl /run/build.pl
-
-ENV WORK_DIR /run
-
-ENV RELEASE_DESC=__RELEASE_DESC__
+RUN apk --no-cache add openssl openssh-client subversion
+COPY rainbond-chaos entrypoint.sh /run/
+COPY export-app /src/export-app
+COPY build-app /src/build-app
 
 WORKDIR $WORK_DIR
+
+ENV RELEASE_DESC=__RELEASE_DESC__
 
 ENTRYPOINT ["/run/entrypoint.sh"]

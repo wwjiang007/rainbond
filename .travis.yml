@@ -1,14 +1,11 @@
+sudo: required
 language: go
-
-go_import_path: github.com/goodrain/rainbond
-
 go:
-  - "1.8.3"
-
-# Run coverage tests.
-matrix:
-  fast_finish: true
-  allow_failures:
-    - go: "1.8.3"
+- 1.13.x
+services:
+  - docker
+git:
+  depth: 1
 script:
-  - make build
+- 'if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then bash ./release.sh all push; fi'
+- 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then bash ./release.sh all; fi'

@@ -1,60 +1,76 @@
-<img src="https://github.com/goodrain/rainbond/blob/master/docs/rainbond_logo.png" width="100%">
+<img src="https://grstatic.oss-cn-shanghai.aliyuncs.com/images/rainbond%20log_full.png" width="60%">
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/goodrain/rainbond)](https://goreportcard.com/report/github.com/goodrain/rainbond) 
+[![Rainbond](https://jaywcjlove.github.io/sb/lang/chinese.svg)](README-zh.md)
 [![GitHub stars](https://img.shields.io/github/stars/goodrain/rainbond.svg?style=flat-square)](https://github.com/goodrain/rainbond/stargazers)
-![Rainbond version](https://img.shields.io/badge/version-v3.5-brightgreen.svg)
+![Rainbond version](https://img.shields.io/badge/version-v5.2-brightgreen.svg)
 [![Build Status](https://travis-ci.org/goodrain/rainbond.svg?branch=master)](https://travis-ci.org/goodrain/rainbond)
 [![GoDoc](https://godoc.org/github.com/goodrain/rainbond?status.svg)](https://godoc.org/github.com/goodrain/rainbond)
 
+[Website](http://www.rainbond.com) • [Documentation](https://www.rainbond.com/docs/)
 
-[Website](http://www.rainbond.com) • [Docs](https://www.rainbond.com/docs/stable/) • [Public Cloud](https://sso.goodrain.com/#/login/https%3A%2F%2Fwww.goodrain.com%2F%23%2Findex)
+|![notification](./docs/bell-outline-badge.svg) What is NEW!|
+|------------------|
+|August 24, 2020 ,Rainbond 5.2 Stable version is officially released [View Release](https://mp.weixin.qq.com/s/q1sgEaBPaepsuUOfk1un-w)|
 
-**Rainbond** is an application-centric Platform as a Service, with innovative concept and complete ecological comes from continuous verification and optimization.
 
-By integrating best practices of Kubernetes based containers management, Service Mesh microservice architecture, CI/CD and multiple data center resource management, Rainbond provides full life-cycle management of cloud native applications, connects application and infrastructure, application and application, infrastructure and infrastructure.
+## Rainbond Introduction
 
-Choose Rainbond for the same reasons disruptive companies do: it serve as a easy-to-use cloud native application delivery platform that offers agile development, efficient operation and lean management experience. 
+<b>Cloud native application management platform</b>
 
-## Features
+* Implementing the microservice architecture without changing the code.
+* Manage app in k8s without learning about container techniques.
+* Help enterprises implement application to the cloud, one-stop delivery of any enterprise application to k8s cluster, hybrid cloud, multi-cloud and other infrastructure.
 
-* Kubernetes scheduling system intergated
-* Application-centric console
-* Supports multiple microservice architecture (Spring Cloud, Dubbo and api gateway)
-* Native microservice governance (service discovery, dynamic routing, limiting and fuse) based on extendable Service Mesh 
-* Business-level application performance analysis supports multiple types protocols (HTTP, Mysql, PostgreSQL)
-* Build applications from source codeS (Java, PHP, Python, Golang, Ruby, etc.)
-* Continuous build and deployment from private and public git repositories
-* Quick application build with container image, docker-run command and docker-compose
-* Pluggable data center supports various types of load balancing, SDN networks, various types of storage systems development
-* Public and private application market with complete application sharing mechanism
-* Multiple data center and across data center application deployment
-* The management node (platform service) HA available.
-* Compute cluster automation management, scale on demand, complete node monitoring.
+[Request Demo](https://cloud.goodrain.com/enterprise-server/trial)
 
-## Quick Start
+With Rainbond you can:
 
-1. [Install Rainbond](http://www.rainbond.com/docs/stable/getting-started/pre-install.html)
-2. [Create First Application](http://www.rainbond.com/docs/stable/user-app-docs/addapp/addapp-code.html)
-3. [Build Microservice Architecture](http://www.rainbond.com/docs/stable/user-app-docs/addapp/addapp-cloud_framework.html)
+* Enterprise cloud native DevOps
 
-## Architecture
+Application-oriented DevOps development pipeline, provides the ability to continuously build cloud-native applications from source code or simple image, does not require developers to have containerization capability, developer-friendly, non-intrusive source code, the business continues to release to the cloud.
 
-<img src="https://github.com/goodrain/rainbond/blob/master/docs/rainbond_architecture.png" href="http://www.rainbond.com/docs/stable/getting-started/architecture.html">
+* Enterprise microservice governance
 
-## Roadmap
+Built-in ServiceMesh microservice framework, microservice governance can be used out of the box, and traditional business cloud as a service. Plug-in expansion and enhancement of microservice governance functions, and work in conjunction with microservice frameworks such as SpringCloud Dubbo, effectively lowering the threshold of microservice technology.
 
-[>>3.6-Roadmap](https://github.com/goodrain/rainbond/projects/3)
+* Kubernetes multi-cloud management
 
-## Contributing
+Kubernetes technology is complex and difficult to get started; a large number of deployment, Statefulset, or Operator resource management are complex problems that directly use Kubernetes clusters. Rainbond's application-centric resource management model shields the complexity of Kubernetes, and Kubernetes resources are handed over to Rainbond for orchestration and management.
 
-Please read [CONTRIBUTING](https://github.com/goodrain/rainbond/blob/master/CONTRIBUTING.md) to learn how you can start working on the Framework yourself.
+* Enterprise Middle Platform Construction and Application Delivery
+
+There are many enterprise business systems, many delivery projects, and many IT products. Build a unified enterprise business center, integrate all digital systems and common component libraries of the enterprise to form digital assets, and efficiently reuse by internal teams. ToB delivery scenarios achieve the greatest level of The combination of automation, standardization and customization.
+
+* Support multiple CPU architectures
+
+Rainbond has completed two-way authentication with localized computing bases represented by Loongson, Feiteng, and Kirin operating systems, which enables Rainbond to shield the differences in the underlying CPU architecture and operating system and provide users with a unified localized business application management platform.
+
+[Rainbond RoadMap](https://github.com/goodrain/rainbond/issues?q=is%3Aissue+is%3Aopen+label%3A%22Feature+Suggestions%22)
+
+## Quick start
+
+1.  [Install Rainbond Cluster](https://www.rainbond.com/docs/quick-start/rainbond_install/)
+2.  [Create an Application and Component](https://www.rainbond.com/docs/user-manual/app-creation/)
+3.  [Learning concepts](https://www.rainbond.com/docs/get-start/)
+3.  [Watch the tutorial video](https://www.rainbond.com/video.html)
 
 ## Community
 
-* WeChat: add WeChat ID "**qingguo-wei**" to join Rainbond WeChat group  
-* Stack Overflow: https://stackoverflow.com/questions/tagged/rainbond
+[Rainbond Community](https://t.goodrain.com)    You are welcome to read or contribute to the use cases of Rainbond in the community.
+
+[Rainbond Website](https://www.rainbond.com)    Read more about Rainbond.
+
+<center><img width="200px" src="https://grstatic.oss-cn-shanghai.aliyuncs.com/images/12141565594759_.pic_hd.jpg"/></center>
+<center>Join WeChart</center>
+
+## Related items
+
+   * [Rainbond-Console](https://github.com/goodrain/rainbond-console) 
+   * [Rainbond-Console-UI](https://github.com/goodrain/rainbond-ui) 
+   * [Rainbond-Operator](https://github.com/goodrain/rainbond-operator) 
+   * [Rainbond-Builder](https://github.com/goodrain/builder) 
+   * [Rainbond-Docs](https://github.com/goodrain/rainbond-docs)
 
 ## License
 
-Rainbond is under the LGPL-3.0 license, see [LICENSE](https://github.com/goodrain/rainbond/blob/master/LICENSE) and [Licensing](https://github.com/goodrain/rainbond/blob/master/Licensing.md) for details.
-
+Rainbond follow LGPL-3.0 license，Details see[LICENSE](https://github.com/goodrain/rainbond/blob/master/LICENSE) and [Licensing](https://github.com/goodrain/rainbond/blob/master/Licensing.md)

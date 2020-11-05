@@ -1,8 +1,8 @@
 #!/bin/bash
-if [ "$1" = "debug" ];then
+if [ "$1" = "bash" ];then
     exec /bin/bash
 elif [ "$1" = "version" ];then
-    echo ${RELEASE_DESC}
+    /usr/bin/rainbond-webcli version
 else
     exec /usr/bin/rainbond-webcli $@
 fi

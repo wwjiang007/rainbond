@@ -1,10 +1,5 @@
 FROM goodrainapps/alpine:3.4
-
-COPY rainbond-node /run/rainbond-node
-ADD entrypoint.sh /run/entrypoint.sh
-RUN chmod 655 /run/rainbond-node
-EXPOSE 6300
-
+ADD . /run
 ENV RELEASE_DESC=__RELEASE_DESC__
-
+EXPOSE 6100 6101 9125
 ENTRYPOINT ["/run/entrypoint.sh"]

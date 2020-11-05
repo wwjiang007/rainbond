@@ -1,3 +1,22 @@
+# Compile the project
+
+```
+# you must have docker and golang environment
+
+# build all docker image
+make image
+
+# build all binary file
+make binary
+
+# build binary for different os
+GOOS=windows make binary
+
+# if you what build one component
+make binary WHAT=api
+make image WHAT=api
+```
+
 # How to contribute
 
 Read [Contributing to Open Source on GitHub](https://guides.github.com/activities/contributing-to-open-source/) before contribute.
@@ -15,7 +34,3 @@ Check Pull Request is another way to contribute.
 ## Documents
 
 When you find any typo or you have awesome contents to supplement, you can also use **Pull Request**.
-
-## Join this project
-
-Contact us via [Mail](mailto:info@goodrain.com)

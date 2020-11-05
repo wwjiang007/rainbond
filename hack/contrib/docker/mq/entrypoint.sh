@@ -1,8 +1,8 @@
 #!/bin/bash
-if [ "$1" = "debug" ];then
+if [ "$1" = "bash" ];then
     exec /bin/bash
 elif [ "$1" = "version" ];then
-    echo ${RELEASE_DESC}
+    /run/rainbond-mq version
 else
     exec /run/rainbond-mq $@
 fi
